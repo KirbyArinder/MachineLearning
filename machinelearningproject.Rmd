@@ -1,0 +1,145 @@
+---
+title: "Machine Learning course project"
+author: "Kirby Arinder"
+date: "Sunday, May 24, 2015"
+output: html_document
+---
+###Overview
+This document is intended to partially fulfill the requirements for the course project for the Machine Learning class. But I suppose that's extra-diegetic and not really playing the game; its in-class purpose is to create a model capable of predicting whether or not a barbell lift has been done correctly (and if incorrectly, the nature of the incorrect lift, given several preestablished categories).  
+
+###Procedure
+I feel a tad weird verbally documenting what I did, and then including code, because the code is not only commented, it also perfectly operationalizes all of my actual processes, and I know that the audience for this document should be sufficiently familiar with R code to be able to read that as clearly as, if not more clearly than, my English sentences, which may tend toward the verbose. But nonetheless, here goes.  
+
+There wasn't a ton of art that went into this model. The first step was to check the structure of the data and remove all variables with no predictive value.  Thus, all pure-bookkeeping variables (unique identifier, name, time, etc.) were removed. Then, summary statistics taken on the base data, which were only reported once per sizeable subset of the data, were removed; the working assumption was that base data and not summary statistics were useful for prediction.  
+
+The training data were subdivided into training and test sets, using a 70/30 split; the model was created on the training subset of the training data using a random forest method. The outside error rate was estimated manually (just to ensure that I was using the confusionMatrix function properly) on the test subset of the training data, and then a confusion matrix was created using the confusionMatrix function.
+
+The outside error rate seemed acceptably low -- accuracy 0.9935, bottom bound of the confidence interval 0.9911 -- so actual predictions were made using the testing data.  All predictions were correct.  
+
+###Data
+All data used in this document emerged from the following study:  
+
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013. 
+
+###Code
+The following represents the complete R code used in this document:  
+
+```{r}
+#Reads files
+train <- read.csv("pml-training.csv")
+
+test <- read.csv("pml-testing.csv")
+
+#loads required packages
+library(dplyr)
+library(caret)
+
+#sets the seed. I picked it with
+#random.org, because I like 
+#random in my pseudorandom, dawg.
+
+set.seed(34571)
+
+#removes bookkeeping variables
+#without predictive value
+trainslim <- train[,c(-1:-7)]
+
+#removes summary variables
+
+#There's got to be a better way to do this; it feels
+#wasteful to make all the extra dfs along the way. But
+#I stuck with what I knew for now.
+
+trainslimmer1 <- select(trainslim, -starts_with("kurtosis"))
+trainslimmer2 <- select(trainslimmer1, -starts_with("skewness"))
+trainslimmer3 <- select(trainslimmer2, -starts_with("max"))
+trainslimmer4 <- select(trainslimmer3, -starts_with("min"))
+trainslimmer5 <- select(trainslimmer4, -starts_with("amplitude"))
+trainslimmer6 <- select(trainslimmer5, -starts_with("avg"))
+trainslimmer7 <- select(trainslimmer6, -starts_with("stddev"))
+trainslimmer8 <- select(trainslimmer7, -starts_with("var"))
+
+#makin' training and test sets, 70/30
+
+trainflag <- createDataPartition(y=trainslimmer8$classe, p=0.7, list=FALSE)
+traintrain <- trainslimmer8[trainflag,]
+traintest <- trainslimmer8[-trainflag,]
+
+#Okay, now to make a model.  
+
+#This took a ton of time, so I didn't want to do it more than once.
+
+if(!exists("classepredict")) {
+classepredict <- train(classe ~ ., 
+                       data = traintrain, 
+                       method = "rf")
+}
+
+#Now a prediction on the traintest set.
+
+traintestpredict <- predict(classepredict, newdata = traintest)
+
+#A check of the outside error rate
+
+numright <- sum(traintestpredict == traintest$classe)
+outsideacc <- numright/length(traintestpredict)
+outsideerr <- 1-outsideacc
+
+#Okay, not bad. Now a confusion matrix.
+
+confusionmat <- confusionMatrix(traintest$classe, traintestpredict)
+
+#Okay, so we have a model. Now to make actual predictions,
+#which will require cleaning the test set.  
+
+#same deal as before.  First the bookkeeping, then
+#the summary data are removed. This still feels dumb
+#and really should have been replaced by a function,
+#but I'm on a roll and don't want to mess with that
+#right now.  
+
+testslim <- test[,c(-1:-7)]
+testslimmer1 <- select(testslim, -starts_with("kurtosis"))
+testslimmer2 <- select(testslimmer1, -starts_with("skewness"))
+testslimmer3 <- select(testslimmer2, -starts_with("max"))
+testslimmer4 <- select(testslimmer3, -starts_with("min"))
+testslimmer5 <- select(testslimmer4, -starts_with("amplitude"))
+testslimmer6 <- select(testslimmer5, -starts_with("avg"))
+testslimmer7 <- select(testslimmer6, -starts_with("stddev"))
+testslimmer8 <- select(testslimmer7, -starts_with("var"))
+
+#Now the rubber meets the road:  Real prediction!
+
+finalpredict <- predict(classepredict, newdata = testslimmer8)
+
+#This next bit is copied directly from the
+#assignment webpage.  
+
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+#And now, I just call the function that Leek created,
+#and that ought to create my twenty answer files.
+
+pml_write_files(finalpredict)
+
+
+```
+
+###Selected results
+Here's the confusion matrix:  
+
+```{r}
+confusionmat
+```
+
+And here are the final predictions:
+
+```{r}
+finalpredict
+```
